@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #17212b;
+  background: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background: #ffffff;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: #ffffff;
+  background: #16705a;
+}
+
+@layer components {
+  .section-wrap {
+    @apply mx-auto w-full max-w-6xl px-6 lg:px-8;
+  }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-[0.18em] text-forest;
+  }
+
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2;
+  }
+}
+
+.flow-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.flow-card {
+  border: 1px solid #dce5e1;
+  padding: 1.1rem 1.25rem 1.15rem;
+}
+
+.flow-card-paper {
+  color: #17212b;
+  background: #ffffff;
+}
+
+.flow-card-profile {
+  color: #0f5746;
+  background: #edf5f1;
+  border-color: #c9ded5;
+}
+
+.flow-card-match {
+  color: #ffffff;
+  background: #16705a;
+  border-color: #16705a;
+}
+
+.flow-arrow {
+  height: 1.75rem;
+  color: #16705a;
+  font-size: 1.35rem;
+  line-height: 1.75rem;
+  text-align: center;
+}
+
+.loading-progress {
+  width: 45%;
+  animation: loading-progress 1.6s ease-in-out infinite;
+}
+
+@keyframes loading-progress {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(250%); }
+}
