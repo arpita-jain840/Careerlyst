@@ -1,65 +1,82 @@
 import os
+import json
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from groq import Groq
 
 load_dotenv()
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def search_opportunities(job_preferences):
-
-    queries = job_preferences["search_queries"]
+    queries = job_preferences.get("search_queries", [])
 
     prompt = f"""
-You are an AI internship discovery system.
+You are an internship discovery system.
 
-Find real and currently available internship opportunities
-for these search queries:
+Search the web for real internship opportunities using these queries:
+{json.dumps(queries)}
 
-{queries}
+Search for opportunities relevant to students in India.
+Consider Internshala, Wellfound,Glassdoor, LinkedIn, Indeed, Unstop,
+AICTE, government internship portals, and company career pages.
 
-Focus on opportunities from platforms such as:
-- Internshala
-- Wellfound
-- LinkedIn
-- Indeed
-- Unstop
-- Glassdoor
-- AICTE Internship Portal
-- Government internship portals
-- Company career pages
-
-Return ONLY opportunities that you can find from web search.
-
-For each opportunity provide:
-
+Return ONLY a valid JSON array of opportunities.
+Each item must have these fields:
 - title
 - company
-- platform/source
+- platform
 - location
-- short description
+- description
 - url
 
-Do not invent companies, jobs or URLs.
-
-Search queries:
-{queries}
+Rules:
+- Include only opportunities supported by actual web search results.
+- Use the original listing or application URL when available.
+- Never invent companies, listings, URLs, eligibility, or details.
+- Exclude results when you cannot identify a credible listing URL.
+- Avoid duplicates.
+- Return at most 20 opportunities.
+- If no suitable opportunities are found, return [].
+- Do not include Markdown fences or extra text.
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            tools=[
-                types.Tool(
-                    google_search=types.GoogleSearch()
-                )
-            ]
-        )
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Find real opportunities through web search. "
+                    "Never fabricate listings or URLs. "
+                    "Return only the requested JSON array."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        tools=[{"type": "browser_search"}],
+        tool_choice="required",
+        temperature=0.2,
+        max_completion_tokens=4096,
     )
 
-    return response.text
+    content = response.choices[0].message.content
+
+    if not content:
+        raise ValueError("Groq returned an empty opportunity search response.")
+
+    # Handle accidental Markdown fences, if returned.
+    content = content.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[-1]
+        if content.endswith("```"):
+            content = content[:-3].strip()
+        if content.startswith("json"):
+            content = content[4:].strip()
+
+    opportunities = json.loads(content)
+
+    if not isinstance(opportunities, list):
+        raise ValueError("Opportunity search did not return a JSON list.")
+
+    return opportunities

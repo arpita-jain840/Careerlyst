@@ -2,12 +2,12 @@ import os
 import json
 
 from dotenv import load_dotenv
-from google import genai
+from groq import Groq
 
 load_dotenv()
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
 )
 
 
@@ -71,9 +71,21 @@ Rules:
     explain that uncertainty instead of inventing it.
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+
+        response_format={
+            "type": "json_object"
+        }
     )
 
-    return json.loads(response.text)
+    return json.loads(
+        response.choices[0].message.content
+    )
