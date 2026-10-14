@@ -1,44 +1,48 @@
+
 import os
 import json
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
 from groq import Groq
 
 load_dotenv()
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+api_key = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=api_key) if api_key else None
 
 
 def search_opportunities(job_preferences):
+    if client is None:
+        raise RuntimeError("GROQ_API_KEY is missing from the backend .env file.")
+
     queries = job_preferences.get("search_queries", [])
 
+    if not isinstance(queries, list) or not queries:
+        return []
+
+    # Limit prompt size to reduce token usage.
+    queries = [str(q).strip() for q in queries[:5] if str(q).strip()]
+
     prompt = f"""
-You are an internship discovery system.
+Find real internship listings on the web for students in India.
 
-Search the web for real internship opportunities using these queries:
-{json.dumps(queries)}
+Search queries:
+{json.dumps(queries, ensure_ascii=False)}
 
-Search for opportunities relevant to students in India.
-Consider Internshala, Wellfound,Glassdoor, LinkedIn, Indeed, Unstop,
-AICTE, government internship portals, and company career pages.
-
-Return ONLY a valid JSON array of opportunities.
-Each item must have these fields:
-- title
-- company
-- platform
-- location
-- description
-- url
+Return ONLY a JSON array with at most 12 opportunities.
+Each item must contain:
+title, company, platform, location, description, url
 
 Rules:
-- Include only opportunities supported by actual web search results.
-- Use the original listing or application URL when available.
-- Never invent companies, listings, URLs, eligibility, or details.
-- Exclude results when you cannot identify a credible listing URL.
-- Avoid duplicates.
-- Return at most 20 opportunities.
-- If no suitable opportunities are found, return [].
-- Do not include Markdown fences or extra text.
+- Use actual web search results, not memory or guesses.
+- Prefer original application/listing URLs.
+- Never invent a company, listing, URL, or eligibility requirement.
+- Exclude listings without a credible source URL.
+- Keep descriptions to one short sentence.
+- Avoid duplicate listings.
+- If no credible results are found, return [].
+- Do not use Markdown fences or extra text.
 """
 
     response = client.chat.completions.create(
@@ -47,9 +51,8 @@ Rules:
             {
                 "role": "system",
                 "content": (
-                    "Find real opportunities through web search. "
-                    "Never fabricate listings or URLs. "
-                    "Return only the requested JSON array."
+                    "Search the web for real internship listings. "
+                    "Never invent results. Return only a JSON array."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -57,26 +60,76 @@ Rules:
         tools=[{"type": "browser_search"}],
         tool_choice="required",
         temperature=0.2,
-        max_completion_tokens=4096,
+        max_completion_tokens=2048,
     )
 
     content = response.choices[0].message.content
 
     if not content:
-        raise ValueError("Groq returned an empty opportunity search response.")
+        raise ValueError("Groq returned an empty search response.")
 
-    # Handle accidental Markdown fences, if returned.
     content = content.strip()
+
+    # Remove optional Markdown fences.
     if content.startswith("```"):
-        content = content.split("\n", 1)[-1]
+        content = content.split("\n", 1)[-1].strip()
         if content.endswith("```"):
             content = content[:-3].strip()
-        if content.startswith("json"):
+        if content.lower().startswith("json"):
             content = content[4:].strip()
 
-    opportunities = json.loads(content)
+    try:
+        opportunities = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Groq returned invalid JSON for internship search."
+        ) from exc
 
     if not isinstance(opportunities, list):
-        raise ValueError("Opportunity search did not return a JSON list.")
+        raise ValueError("Search response must be a JSON array.")
 
-    return opportunities
+    cleaned = []
+    seen_urls = set()
+
+    for item in opportunities:
+        if not isinstance(item, dict):
+            continue
+
+        required_fields = [
+            "title", "company", "platform",
+            "location", "description", "url"
+        ]
+
+        if any(
+            not isinstance(item.get(field), str) or not item[field].strip()
+            for field in required_fields
+        ):
+            continue
+
+        url = item["url"].strip()
+
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            continue
+
+        if parsed.scheme != "https" or not parsed.netloc:
+            continue
+
+        if parsed.hostname is None or "." not in parsed.hostname:
+            continue
+
+        normalized_url = url.rstrip("/").lower()
+
+        if normalized_url in seen_urls:
+            continue
+
+        seen_urls.add(normalized_url)
+
+        item["url"] = url
+        cleaned.append(item)
+
+        if len(cleaned) >= 12:
+            break
+
+    return cleaned
