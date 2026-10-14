@@ -34,7 +34,8 @@ function postedTime(opportunity) {
 
 function OpportunitiesPage() {
   const result = getAnalysisResult()
-  const opportunities = asList(result?.opportunities)
+  const opportunities = asList(
+  result?.matched_opportunities ?? result?.opportunities)  
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('Best Match')
   const [eligibleOnly, setEligibleOnly] = useState(false)
