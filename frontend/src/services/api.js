@@ -1,4 +1,3 @@
-
 const BACKEND_ENDPOINT = 'http://127.0.0.1:8000/upload-resume'
 
 const API_URL =
@@ -10,8 +9,20 @@ export async function uploadResume(file) {
     throw new Error('Please select a resume PDF to upload.')
   }
 
-  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+  const isPdf =
+    file.type === 'application/pdf' ||
+    (file.type === '' && file.name.toLowerCase().endsWith('.pdf'))
+
+  if (!isPdf || !file.name.toLowerCase().endsWith('.pdf')) {
     throw new Error('Please upload your resume as a PDF file.')
+  }
+
+  if (file.size === 0) {
+    throw new Error('The selected PDF is empty. Please choose another file.')
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('Resume size must be 10 MB or less.')
   }
 
   const formData = new FormData()
@@ -47,7 +58,7 @@ export async function uploadResume(file) {
     throw new Error(message)
   }
 
-  if (!data || typeof data !== 'object') {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('The server returned an invalid response.')
   }
 
