@@ -5,6 +5,7 @@ import OpportunitiesPage from './OpportunitiesPage.jsx'
 import SavedPage from './SavedPage.jsx'
 import ApplicationsPage from './ApplicationsPage.jsx'
 import AnalyzingPage from './AnalyzingPage.jsx'
+import AuthPage from './AuthPage.jsx'
 
 const steps = [
   {
@@ -116,6 +117,14 @@ function App() {
     return <ApplicationsPage />
   }
 
+  if (pathname === '/login') {
+    return <AuthPage mode="login" />
+  }
+
+  if (pathname === '/signup') {
+    return <AuthPage mode="signup" />
+  }
+
   return (
     <div id="top" className="overflow-hidden">
       <header className="border-b border-line/70 bg-white">
@@ -188,12 +197,26 @@ function App() {
             </a>
           </nav>
 
-          <a
-            href="/upload"
-            className="focus-ring inline-flex items-center justify-center border border-forest bg-forest px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-forest-dark"
-          >
-            Upload Resume
-          </a>
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-3">
+            <a
+              href="/login"
+              className="focus-ring px-3 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:text-forest"
+            >
+              Login
+            </a>
+            <a
+              href="/signup"
+              className="focus-ring inline-flex items-center justify-center border border-forest px-4 py-2.5 text-sm font-semibold text-forest transition-colors hover:bg-[#edf5f1]"
+            >
+              Sign Up
+            </a>
+            <a
+              href="/upload"
+              className="focus-ring inline-flex items-center justify-center border border-forest bg-forest px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-forest-dark"
+            >
+              Upload Resume
+            </a>
+          </div>
         </div>
       </header>
 
