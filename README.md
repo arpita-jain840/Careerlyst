@@ -114,11 +114,16 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Create a `.env` file inside the `backend/` directory and add your Groq API key using the environment variable name expected by the backend configuration.
+For a fresh setup, copy `backend/.env.example` to `backend/.env`. If `backend/.env` already exists, preserve its current API keys and add any missing variables rather than replacing it. Generate a unique `SECRET_KEY`. Do not commit `.env` files.
 
 ```env
+SECRET_KEY=your-generated-random-secret
 GROQ_API_KEY=your_groq_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+CAREERLYST_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
+
+The backend creates `backend/careerlyst.db` and its tables on startup. For an alternate database file, set `CAREERLYST_DB_PATH`.
 
 Start the backend using the project's configured entry point. If `main.py` starts the FastAPI server directly:
 
@@ -142,19 +147,26 @@ Open the local URL displayed by Vite in your terminal.
 
 ### 4. Configure Frontend–Backend Communication
 
-Ensure the frontend API configuration points to the running backend. If the frontend uses a Vite development proxy, verify its configuration in `frontend/vite.config.js`.
+The Vite development proxy forwards API requests to `http://127.0.0.1:8000`. To use another local backend port, set `CAREERLYST_BACKEND_ORIGIN` before starting Vite. For a deployed frontend, set `VITE_API_BASE_URL` to the backend origin and include the frontend origin in `CAREERLYST_CORS_ORIGINS`.
 
 For a deployed environment, configure the appropriate backend URL rather than relying on a localhost address.
 
 ## 🔌 Backend API
 
-The backend includes a resume-upload workflow.
+The backend includes resume analysis, JWT authentication, and user-owned application tracking.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
 | POST | `/upload-resume` | Upload a PDF resume for profile extraction and opportunity matching |
+| POST | `/auth/signup` | Create an account |
+| POST | `/auth/login` | Authenticate and receive a bearer token |
+| GET | `/auth/me` | Read the authenticated account |
+| GET | `/applications` | List the current user's applications |
+| POST | `/applications` | Add an application or saved opportunity |
+| PATCH | `/applications/{application_id}` | Update status, dates, notes, or opportunity details |
+| DELETE | `/applications/{application_id}` | Delete an application owned by the current user |
 
-The endpoint's actual response fields and available routes depend on the current backend implementation.
+Application records are scoped to the authenticated user. Interview and follow-up dates and notes are stored, but automated email or push notifications are not configured.
 
 ## 🔐 Security and Privacy
 
@@ -169,7 +181,7 @@ The endpoint's actual response fields and available routes depend on the current
 - [ ] Improve live opportunity discovery and source validation.
 - [ ] Strengthen eligibility checks and explainable match scoring.
 - [ ] Connect saved preferences to personalized opportunity searches.
-- [ ] Add persistent user accounts and database-backed application tracking.
+- [x] Add persistent user accounts and database-backed application tracking.
 - [ ] Improve error handling, rate-limit management, and automated testing.
 - [ ] Deploy the frontend and backend for public access.
 

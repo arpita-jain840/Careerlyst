@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { loginUser, signupUser } from './services/api.js'
+import { setAuthSession } from './services/authStorage.js'
 
 function Brand() {
   return (
@@ -118,6 +120,7 @@ function AuthPage({ mode }) {
     confirmPassword: false,
   })
   const [notice, setNotice] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const updateValue = (field, value) => {
     setValues((current) => ({ ...current, [field]: value }))
@@ -160,14 +163,32 @@ function AuthPage({ mode }) {
     return Object.keys(nextErrors).length === 0
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     setNotice('')
 
-    if (validate()) {
-      setNotice(
-        'Authentication is not connected yet. Your details have not been sent or stored.'
-      )
+    if (!validate() || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      if (isSignup) {
+        await signupUser({
+          name: values.name.trim(),
+          email: values.email.trim(),
+          password: values.password,
+        })
+      }
+
+      const session = await loginUser({
+        email: values.email.trim(),
+        password: values.password,
+      })
+      setAuthSession(session)
+      window.location.assign('/applications')
+    } catch (error) {
+      setNotice(error.message || 'We could not complete sign-in. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -241,7 +262,7 @@ function AuthPage({ mode }) {
             <span className="h-px flex-1 bg-line" />
           </div>
 
-          <form onSubmit={handleSubmit} noValidate>
+          <form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
             <div className="space-y-5">
               {isSignup && (
                 <div>
@@ -407,16 +428,14 @@ function AuthPage({ mode }) {
 
             <button
               type="submit"
-              className="focus-ring mt-7 flex w-full items-center justify-center bg-forest px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-forest-dark"
+              disabled={isSubmitting}
+              className="focus-ring mt-7 flex w-full items-center justify-center bg-forest px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-forest-dark disabled:cursor-wait disabled:opacity-70"
             >
-              {isSignup ? 'Create Account' : 'Log In'}
+              {isSubmitting
+                ? isSignup ? 'Creating account...' : 'Logging in...'
+                : isSignup ? 'Create Account' : 'Log In'}
             </button>
           </form>
-
-          <p className="mt-4 text-center text-xs leading-5 text-slate-500">
-            Authentication is not connected yet. Sign-in and account creation
-            are not available at this time.
-          </p>
 
           {notice && (
             <p

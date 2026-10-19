@@ -1,7 +1,12 @@
+from database import init_db
+from contextlib import asynccontextmanager
+from auth import router as auth_router
+from applications import router as applications_router
 import logging
-
+import os
 import pymupdf
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from ai.profile_extractor import extract_profile
 from ai.job_preferences import generate_job_preferences
@@ -9,6 +14,31 @@ from ai.opportunity_search import search_opportunities
 from ai.matcher import match_opportunities
 
 app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CAREERLYST_CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+app.include_router(auth_router)
+app.include_router(applications_router)
+
 logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
