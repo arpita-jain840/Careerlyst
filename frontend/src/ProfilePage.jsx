@@ -104,7 +104,8 @@ function TagInput({ label, values, options, onAdd, onRemove }) {
                 ×
               </button>
             </span>
-          )) : (
+          ))
+        ) : (
           <span className="text-xs text-slate-400">
             Not added yet
           </span>
