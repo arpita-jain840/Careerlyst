@@ -59,70 +59,102 @@ function getInitialPreferences(profile) {
   }
 }
 
-function TagInput({ label, values, placeholder, onAdd, onRemove }) {
-  const [value, setValue] = useState('')
+function TagInput({ label, values, options, onAdd, onRemove }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [search, setSearch] = useState('')
 
-  const addValue = () => {
-    const nextValue = value.trim()
-
-    if (!nextValue || values.includes(nextValue)) return
-
-    onAdd(nextValue)
-    setValue('')
-  }
+  const filteredOptions = options.filter((option) =>
+    option.toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
-    <div>
+    <div className="relative">
       <label className="block text-sm font-semibold text-ink">
         {label}
-
-        <div className="mt-2 flex gap-2">
-          <input
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                addValue()
-              }
-            }}
-            className="focus-ring min-w-0 flex-1 border border-line bg-white px-4 py-3 text-sm font-normal text-ink placeholder:text-slate-400"
-            placeholder={placeholder}
-          />
-
-          <button
-            type="button"
-            onClick={addValue}
-            className="focus-ring border border-forest px-4 py-2 text-sm font-semibold text-forest hover:bg-forest hover:text-white"
-          >
-            Add
-          </button>
-        </div>
       </label>
+
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="focus-ring mt-2 flex w-full items-center justify-between border border-line bg-white px-4 py-3 text-left text-sm font-normal text-ink"
+      >
+        <span>
+          {values.length
+            ? `${values.length} selected`
+            : 'Select options'}
+        </span>
+
+        <span>{isOpen ? '▲' : '▼'}</span>
+      </button>
 
       <div className="mt-3 flex min-h-8 flex-wrap gap-2">
         {values.length ? (
           values.map((item) => (
             <span
               key={item}
-              className="inline-flex max-w-full items-center gap-2 border border-line bg-mist px-3 py-2 text-xs font-medium text-ink"
+              className="inline-flex items-center gap-2 border border-line bg-mist px-3 py-2 text-xs font-medium text-ink"
             >
-              <span className="break-words">{item}</span>
+              {item}
 
               <button
                 type="button"
                 onClick={() => onRemove(item)}
-                className="focus-ring text-base leading-none text-slate-400 hover:text-ink"
-                aria-label={`Remove ${item}`}
+                className="text-base leading-none text-slate-400 hover:text-ink"
               >
                 ×
               </button>
             </span>
-          ))
-        ) : (
-          <span className="text-xs text-slate-400">Not added yet</span>
+          )) : (
+          <span className="text-xs text-slate-400">
+            Not added yet
+          </span>
         )}
       </div>
+
+      {isOpen && (
+        <div className="absolute z-20 mt-1 w-full border border-line bg-white p-2 shadow-lg">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search options..."
+            className="focus-ring mb-2 w-full border border-line px-3 py-2 text-sm"
+          />
+
+          <div className="max-h-56 overflow-y-auto">
+            {filteredOptions.map((option) => (
+              <label
+                key={option}
+                className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-mist"
+              >
+                <input
+                  type="checkbox"
+                  checked={values.includes(option)}
+                  onChange={() => {
+                    if (values.includes(option)) {
+                      onRemove(option)
+                    } else {
+                      onAdd(option)
+                    }
+                  }}
+                />
+
+                {option}
+              </label>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false)
+              setSearch('')
+            }}
+            className="mt-2 w-full border border-forest px-3 py-2 text-sm font-semibold text-forest"
+          >
+            Done
+          </button>
+        </div>
+      )}
     </div>
   )
 }
