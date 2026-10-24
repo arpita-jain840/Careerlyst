@@ -58,7 +58,7 @@ function SavedPage() {
               No saved opportunities yet.
             </h2>
             <p className="mt-3 text-sm text-slate-500">
-              Save opportunities from your discovery feed to find them here.
+              Save opportunities from your discovery feed to find them Here.
             </p>
             <a
               href="/opportunities"
