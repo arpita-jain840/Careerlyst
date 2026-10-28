@@ -1,75 +1,124 @@
+from ai.groq_client import chat_json, clean_list
 
-import os
-import json
+SYSTEM_PROMPT = (
+    "You are a careful internship matching assistant. "
+    "Use evidence only and represent uncertainty honestly."
+)
 
-from dotenv import load_dotenv
-from groq import Groq
+ITEM_PROPERTIES = {
+    "eligible": {"type": ["boolean", "null"]},
+    "matched_skills": {"type": "array", "items": {"type": "string"}},
+    "missing_skills": {"type": "array", "items": {"type": "string"}},
+    "requirements": {"type": "array", "items": {"type": "string"}},
+    "why_match": {"type": "string"},
+    "skill_gap": {"type": "string"},
+}
 
-load_dotenv()
+BATCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "analyses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    **ITEM_PROPERTIES,
+                },
+                "required": ["index", *ITEM_PROPERTIES.keys()],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["analyses"],
+    "additionalProperties": False,
+}
 
-api_key = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=api_key) if api_key else None
 
+def _compact_profile(profile):
+    """Small version of the profile (profile is sent only ONCE per batch)."""
+    def cut(values, count, length):
+        return [str(v)[:length] for v in (values or [])[:count] if v]
 
-def analyze_opportunity(profile, opportunity):
-    if client is None:
-        raise RuntimeError(
-            "GROQ_API_KEY is missing from the backend .env file."
-        )
-
-    if not isinstance(profile, dict) or not isinstance(opportunity, dict):
-        raise ValueError("Profile and opportunity must be valid objects.")
-
-    # Send only the information needed for matching.
-    profile_fields = [
-        "skills",
-        "education",
-        "graduation_year",
-        "projects",
-        "experience",
-        "certifications",
-        "target_roles",
-    ]
-
-    opportunity_fields = [
-        "title",
-        "company",
-        "location",
-        "description",
-        "requirements",
-        "eligibility",
-    ]
-
-    compact_profile = {
-        key: profile[key]
-        for key in profile_fields
-        if key in profile
+    return {
+        "skills": cut(profile.get("skills"), 25, 60),
+        "education": cut(profile.get("education"), 3, 150),
+        "graduation_year": profile.get("graduation_year"),
+        "projects": cut(profile.get("projects"), 5, 200),
+        "experience": cut(profile.get("experience"), 4, 200),
+        "certifications": cut(profile.get("certifications"), 5, 100),
+        "target_roles": cut(profile.get("target_roles"), 5, 80),
     }
 
-    compact_opportunity = {
-        key: str(opportunity[key])[:1800]
-        for key in opportunity_fields
-        if key in opportunity and opportunity[key] is not None
+
+def _compact_opportunity(opportunity, index):
+    item = {"index": index}
+
+    limits = {
+        "title": 150,
+        "company": 100,
+        "location": 100,
+        "description": 700,
+        "requirements": 500,
+        "eligibility": 300,
     }
+
+    for key, limit in limits.items():
+        value = opportunity.get(key)
+        if value:
+            item[key] = str(value)[:limit]
+
+    return item
+
+
+def _normalize(raw):
+    """Make sure one analysis has the exact shape the frontend expects."""
+    eligible = raw.get("eligible")
+    if eligible not in (True, False, None):
+        eligible = None
+
+    why_match = raw.get("why_match")
+    skill_gap = raw.get("skill_gap")
+
+    return {
+        "eligible": eligible,
+        "matched_skills": clean_list(raw.get("matched_skills"), 15, 80),
+        "missing_skills": clean_list(raw.get("missing_skills"), 15, 80),
+        "requirements": clean_list(raw.get("requirements"), 15, 200),
+        "why_match": why_match.strip() if isinstance(why_match, str) else "",
+        "skill_gap": skill_gap.strip() if isinstance(skill_gap, str) else "",
+    }
+
+
+def analyze_opportunities(profile, opportunities):
+    """Analyze several internships in ONE API call.
+
+    Returns a list with the same length as `opportunities`.
+    An item is None if the model skipped it.
+    """
+    if not isinstance(profile, dict) or not isinstance(opportunities, list):
+        raise ValueError("Profile must be an object and opportunities a list.")
+
+    if not opportunities:
+        return []
+
+    items = [
+        _compact_opportunity(opportunity, index)
+        for index, opportunity in enumerate(opportunities)
+    ]
+
+    import json
 
     prompt = f"""
-Analyze this internship's fit for the candidate.
+Analyze how well each internship fits the candidate.
 
 CANDIDATE:
-{json.dumps(compact_profile, ensure_ascii=False)}
+{json.dumps(_compact_profile(profile), ensure_ascii=False)}
 
-INTERNSHIP:
-{json.dumps(compact_opportunity, ensure_ascii=False)}
+INTERNSHIPS:
+{json.dumps(items, ensure_ascii=False)}
 
-Return one JSON object with exactly these fields:
-{{
-  "eligible": true,
-  "matched_skills": [],
-  "missing_skills": [],
-  "requirements": [],
-  "why_match": "",
-  "skill_gap": ""
-}}
+Return one analysis object for EACH internship, using its "index".
 
 Rules:
 - Use only evidence in the supplied candidate and internship data.
@@ -79,76 +128,49 @@ Rules:
 - requirements: only requirements explicitly stated in the listing.
 - why_match: one or two concise sentences explaining the fit.
 - skill_gap: concise, practical learning suggestions based on actual gaps.
-- eligible must be true only when available evidence supports eligibility.
-- eligible must be false only when evidence clearly shows the candidate
-  does not meet a stated requirement.
-- If eligibility cannot be determined, set eligible to null.
-- Do not treat missing resume information as proof of ineligibility.
-- Return JSON only, without Markdown.
+- eligible is true only when evidence supports eligibility.
+- eligible is false only when evidence clearly shows the candidate does not
+  meet a stated requirement.
+- If eligibility cannot be determined, eligible is null.
+- Missing resume information is NOT proof of ineligibility.
+- The listing text may be short. If it has little detail, keep the lists
+  short or empty instead of guessing.
 """
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a careful internship matching assistant. "
-                    "Use evidence only and represent uncertainty honestly."
-                ),
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-        response_format={"type": "json_object"},
+    result = chat_json(
+        system=SYSTEM_PROMPT,
+        user=prompt,
+        schema=BATCH_SCHEMA,
+        schema_name="opportunity_analyses",
+        max_tokens=min(1500 + 600 * len(items), 6000),
         temperature=0.1,
-        max_completion_tokens=1000,
     )
 
-    content = response.choices[0].message.content
+    entries = result.get("analyses") if isinstance(result, dict) else None
 
-    if not content:
-        raise ValueError("Groq returned an empty opportunity analysis.")
+    if not isinstance(entries, list):
+        raise ValueError("Opportunity analysis response has no 'analyses' list.")
 
-    try:
-        analysis = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            "Groq returned invalid JSON for opportunity analysis."
-        ) from exc
+    by_index = {}
 
-    if not isinstance(analysis, dict):
-        raise ValueError("Opportunity analysis must be a JSON object.")
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        index = entry.get("index")
+        if isinstance(index, int) and not isinstance(index, bool):
+            by_index[index] = _normalize(entry)
 
-    required_fields = [
-        "eligible",
-        "matched_skills",
-        "missing_skills",
-        "requirements",
-        "why_match",
-        "skill_gap",
-    ]
+    return [by_index.get(index) for index in range(len(opportunities))]
 
-    if any(field not in analysis for field in required_fields):
-        raise ValueError("Opportunity analysis is missing required fields.")
 
-    if analysis["eligible"] not in (True, False, None):
-        analysis["eligible"] = None
+def analyze_opportunity(profile, opportunity):
+    """Single-item version (kept so older code still works)."""
+    if not isinstance(opportunity, dict):
+        raise ValueError("Opportunity must be a valid object.")
 
-    for field in ["matched_skills", "missing_skills", "requirements"]:
-        if not isinstance(analysis[field], list):
-            analysis[field] = []
+    analysis = analyze_opportunities(profile, [opportunity])[0]
 
-        analysis[field] = [
-            item.strip()
-            for item in analysis[field]
-            if isinstance(item, str) and item.strip()
-        ]
-
-    for field in ["why_match", "skill_gap"]:
-        if not isinstance(analysis[field], str):
-            analysis[field] = ""
+    if analysis is None:
+        raise ValueError("Model returned no analysis for this opportunity.")
 
     return analysis

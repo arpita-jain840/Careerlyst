@@ -4,6 +4,25 @@ import { getAnalysisResult } from './services/analysisStorage.js'
 
 const PREFERENCES_KEY = 'careerlyst_profile_preferences'
 
+const ROLE_OPTIONS = [
+  'Data Science Intern', 'Data Analyst Intern', 'Machine Learning Intern',
+  'AI/GenAI Intern', 'Python Developer Intern', 'Web Development Intern',
+  'Frontend Developer Intern', 'Backend Developer Intern', 'Full Stack Intern',
+  'Software Engineering Intern', 'Business Analyst Intern', 'UI/UX Design Intern',
+  'Digital Marketing Intern', 'Content Writing Intern', 'HR Intern',
+]
+
+const LOCATION_OPTIONS = [
+  'Remote', 'Delhi', 'Noida', 'Gurugram', 'Bengaluru',
+  'Hyderabad', 'Pune', 'Mumbai', 'Chennai', 'Kolkata',
+]
+
+const SKILL_OPTIONS = [
+  'Python', 'Java', 'JavaScript', 'React', 'Node.js', 'SQL', 'HTML', 'CSS',
+  'Machine Learning', 'Data Analysis', 'Pandas', 'NumPy', 'TensorFlow',
+  'Excel', 'Git', 'Figma', 'FastAPI', 'Tailwind CSS',
+]
+
 function asList(value) {
   if (Array.isArray(value)) return value.filter(Boolean)
   if (typeof value === 'string' && value.trim()) return [value]
@@ -59,31 +78,35 @@ function getInitialPreferences(profile) {
   }
 }
 
-function TagInput({ label, values, options, onAdd, onRemove }) {
+function TagInput({ label, values, options = [], placeholder = 'Search or type to add...', onAdd, onRemove }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(search.toLowerCase())
+  const allOptions = [...new Set([...values, ...options])]
+  const query = search.trim().toLowerCase()
+  const filteredOptions = allOptions.filter((option) =>
+    option.toLowerCase().includes(query)
   )
+  const canAddCustom =
+    query && !allOptions.some((option) => option.toLowerCase() === query)
+
+  const addCustom = () => {
+    const value = search.trim()
+    if (!value) return
+    onAdd(value)
+    setSearch('')
+  }
 
   return (
     <div className="relative">
-      <label className="block text-sm font-semibold text-ink">
-        {label}
-      </label>
+      <label className="block text-sm font-semibold text-ink">{label}</label>
 
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="focus-ring mt-2 flex w-full items-center justify-between border border-line bg-white px-4 py-3 text-left text-sm font-normal text-ink"
       >
-        <span>
-          {values.length
-            ? `${values.length} selected`
-            : 'Select options'}
-        </span>
-
+        <span>{values.length ? `${values.length} selected` : 'Select options'}</span>
         <span>{isOpen ? '▲' : '▼'}</span>
       </button>
 
@@ -95,7 +118,6 @@ function TagInput({ label, values, options, onAdd, onRemove }) {
               className="inline-flex items-center gap-2 border border-line bg-mist px-3 py-2 text-xs font-medium text-ink"
             >
               {item}
-
               <button
                 type="button"
                 onClick={() => onRemove(item)}
@@ -106,9 +128,7 @@ function TagInput({ label, values, options, onAdd, onRemove }) {
             </span>
           ))
         ) : (
-          <span className="text-xs text-slate-400">
-            Not added yet
-          </span>
+          <span className="text-xs text-slate-400">Not added yet</span>
         )}
       </div>
 
@@ -117,9 +137,25 @@ function TagInput({ label, values, options, onAdd, onRemove }) {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search options..."
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                if (canAddCustom) addCustom()
+              }
+            }}
+            placeholder={placeholder}
             className="focus-ring mb-2 w-full border border-line px-3 py-2 text-sm"
           />
+
+          {canAddCustom && (
+            <button
+              type="button"
+              onClick={addCustom}
+              className="mb-2 w-full border border-dashed border-forest px-3 py-2 text-left text-sm font-semibold text-forest hover:bg-mist"
+            >
+              + Add "{search.trim()}"
+            </button>
+          )}
 
           <div className="max-h-56 overflow-y-auto">
             {filteredOptions.map((option) => (
@@ -130,15 +166,10 @@ function TagInput({ label, values, options, onAdd, onRemove }) {
                 <input
                   type="checkbox"
                   checked={values.includes(option)}
-                  onChange={() => {
-                    if (values.includes(option)) {
-                      onRemove(option)
-                    } else {
-                      onAdd(option)
-                    }
-                  }}
+                  onChange={() =>
+                    values.includes(option) ? onRemove(option) : onAdd(option)
+                  }
                 />
-
                 {option}
               </label>
             ))}
