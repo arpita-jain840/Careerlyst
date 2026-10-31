@@ -4,7 +4,7 @@ Change the model without touching code: set GROQ_MODEL in .env
 Example: GROQ_MODEL=openai/gpt-oss-20b
 """
 
-# import json
+import json
 import os
 
 from dotenv import load_dotenv
